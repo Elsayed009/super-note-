@@ -1,5 +1,7 @@
 
 const Note = require('../models/Note');
+const User = require('../models/User');
+const crypto = require('crypto');
 
 const extractKeyWords = (content)=>{
   const stopWords = [
@@ -43,54 +45,38 @@ const createNote = async (req, res )=> {
     const newNote = new Note({
       title,
       content,
+      tags: autoTags,
       expiresAt: expiresAt || null,
-      tags: autoTags
+      user: req.user.id
     });
+
     await newNote.save();
+
+    // tracking logs 
+    // const autoTags = extractKeyWords(content);
+    await User.findByIdAndUpdate(req.user.id, {
+      $push: {
+        interests: {$each: autoTags}, 
+        logs: {
+          action: "created_note",
+          details: `user created a note with tags: ${autoTags.join(', ')}`
+        }
+      }
+    });
+
     res.status(201).json({msg: "note created", data: newNote});
   }catch(err){
     res.status(500).json({msg: "server erorr", data: err.message});
   }
 };
 
-
-
-const deleteNote = async (req, res)=> {
-  try{
-    const {id} =req.params;
-    const updatedNote = await Note.findByIdAndUpdate(
-      id,
-      {
-        isDeleted: true,
-        deleteAt: new Date()
-      },
-      {new: true}
-    );
-    if (!updatedNote){
-      return res.status(404).json({msg: "note is not exists"});
-    }
-    res.status(200).json({msg: "note sent to the trash", data: updatedNote});
-  }catch(err){
-    res.status(500).json({msg: "server erorr", data: err.message});
-  }
-};
-
-const getActiveNotes = async (req, res) => {
-  try{
-    const notes = (await Note.find({isDeleted: false})).Sort({createdAt:-1});
-    res.status(200).json(notes);
-
-  }catch(err){
-    res.status(500).json({msg: "server failed", error: err.message});
-  }
-}
-
+// updateNote endpoint
 const updateNote = async (req, res)=> {
   try{
     const {id}= req.params;
     const {title, content} = req.body;
-    const oldNote = await Note.findById(id);
-
+    // const oldNote = await Note.findById(id);
+    const oldNote = await Note.findOne({_id: id, user: req.user.id});
     //check
     if(!oldNote) return res.status(404).json({msg: "note is not founded"});
 
@@ -117,7 +103,81 @@ const updateNote = async (req, res)=> {
   }
 }
 
-module.exports = {createNote, deleteNote, getActiveNotes, updateNote};
+// deletenote endpoint
+const deleteNote = async (req, res)=> {
+  try{
+    const {id} =req.params;
+    
+    const updatedNote = await Note.findOneAndUpdate(
+      {_id: id, user: req.user.id},
+      {
+        isDeleted: true,
+        deleteAt: new Date()
+      },
+      {new: true}
+    );
+    if (!updatedNote){
+      return res.status(404).json({msg: "note is not exists"});
+    }
+    res.status(200).json({msg: "note sent to the trash", data: updatedNote});
+  }catch(err){
+    res.status(500).json({msg: "server erorr", data: err.message});
+  }
+};
+
+// getting data endpoint
+const getActiveNotes = async (req, res) => {
+  try{
+    const notes = await Note.find({isDeleted: false, user: req.user.id}).sort({createdAt:-1});
+    res.status(200).json(notes);
+
+  }catch(err){
+    res.status(500).json({msg: "server failed", error: err.message});
+  }
+};
+
+// sharing endpoint 
+const shareNote = async (req, res)=>{
+  try{
+    const {id} = req.params;
+    const shareCode = crypto.randomBytes(5).toString('hex');
+
+    const updatedNote = await Note.findOneAndUpdate(
+      {_id: id, user: req.user.id, isDeleted: false},
+      {shareId: shareCode},
+      {new: true}
+    );
+
+    if(!updatedNote) return res.status(404).json({msg: "not founded or deleted"});
+    // const shareLink = `http://localhost:5000/api/notes/public/${shareCode}`;
+    const dynamicBaseUrl = `${req.protocol}://${req.get('host')}`;
+    const shareLink = `${dynamicBaseUrl}/api/notes/public/${shareCode}`;
+    
+    res.status(200).json({msg: "sharing link is ready", link: shareLink});
+  }catch(err){
+    res.status(500).json({msg: "server error", error: err.message});
+  }
+}
+// public shar link endpoint
+const getPublicNote = async (req, res)=>{
+   try{
+      const {shareId} = req.params;
+      const note = await Note.findOne({shareId, isDeleted: false});
+      if (!note) return res.status(404).json({msg: "invalid link"});
+      res.status(200).json({msg: "done", title: note.title, content: note.content});
+  }catch(err){
+    res.status(500).json({msg: "server error", error: err.message});
+  }
+}
+
+
+
+
+
+
+
+
+module.exports = {createNote, deleteNote, getActiveNotes, updateNote, shareNote, getPublicNote};
 
 
 
@@ -224,3 +284,18 @@ module.exports = {createNote, deleteNote, getActiveNotes, updateNote};
 //     }
 //     return tags;
 // };
+
+
+
+
+
+
+
+// 4. التجهيز للإعلانات (The Ads Strategy)
+// دلوقتي لما تيجي تعمل API للإعلانات، هتعمل Query بسيط:
+
+// تجيب أكتر 5 كلمات متكررة في user.interests.
+
+// تبعت الكلمات دي لـ API إعلانات (أو قاعدة بيانات إعلانات عندك) وتجيب اللي يناسبهم.
+
+// مثال: لو اهتماماته فيها كلمة "gym" كتير -> اظهر له إعلان بروتين.

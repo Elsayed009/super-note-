@@ -3,7 +3,7 @@
 const cron = require('node-cron');
 const Note = require('../models/Note');
 
-cron.schedule('*****', async ()=>{
+cron.schedule('0 * * * *', async ()=>{
     console.log('checking the expired notes...');
     try{
         const now = new Date();
@@ -29,7 +29,7 @@ cron.schedule('*****', async ()=>{
     }catch(err){
         console.log('error in the cleaning code', err.message);
     }
-})
+});
 
 
 // mogoose returned obj content 
