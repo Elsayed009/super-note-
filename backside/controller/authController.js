@@ -1,7 +1,8 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const bcrypt = require('bcryptjs');
-
+const Note = require('../models/Note');
+const logAction = require('../utils/logger');
 // the endpoints 
 const register = async (req, res)=> {
     try{
@@ -22,7 +23,7 @@ const register = async (req, res)=> {
             securityAnswer: hashedAnswer
         });
         await newUser.save(); // go get it and await it to be geted and save it
-
+        await logAction(req.user.id, "regisered");
         res.status(201).json({msg: 'user created successfully', dat: newUser});
     }catch(err){
         res.status(500).json({msg: "server dawn", error: err.message});
@@ -39,6 +40,10 @@ const login = async (req, res)=> {
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return res.status(400).json({msg: 'invalid credentails'});
+        // logs 
+        // user.logs.push({action: "user logged in", date: new Date()});
+        // await user.save();
+        await logAction(req.user.id, "logged in");
         // creat token 
         const token = jwt.sign(
             {id: user._id},
@@ -70,7 +75,7 @@ const getsecurityQuestion = async (req, res, next)=>{
         const {email} = req.body;
         const user = await User.findOne({email});
         if(!user) return res.status(404).json({msg: "user not founded"});
-
+        await logAction(user._id, "getsecurityQuestion");
         res.status(200).json({question: user.securityQuestion});
 
     }catch(err){
@@ -89,12 +94,40 @@ const resetPassword = async (req, res, next)=>{
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
-
+        await logAction(user._id, "resetPassword");
         res.status(200).json({msg: "password has been reseted, you can login again now.."});
 
     }catch(err){
         res.status(500).json({msg: "server dawn", error: err.message});
     }
-}
+};
 
-module.exports = {register, login, logout, getsecurityQuestion, resetPassword};
+// delete acc endpoint
+const deleteAccount = async (req, res)=>{
+     try{
+      const userId = req.user.id;
+      await Note.deleteMany({user: userId});
+      await User.findByIdAndDelete(userId);
+      res.clearCookie('token');
+      res.status(200).json({msg: "account and all its related notes deleted successfully"});
+    }catch(err){
+        res.status(500).json({msg: "server dawn", error: err.message});
+    }
+};
+
+
+// logs endpoint
+const getUserLogs= async (req, res)=>{
+    try{
+        const user = await User.findById(req.user.id).select('logs');
+        if (!user) return res.status(404).json({msg: "user not founded"});
+
+        res.status(200).json({msg: "logs retrieved successfully", logs: user.logs});
+
+    }catch(err){
+        res.status(500).json({msg: "server error", error: err.message});
+    }
+};
+
+
+module.exports = {register, login, logout, getsecurityQuestion, resetPassword, deleteAccount, getUserLogs };

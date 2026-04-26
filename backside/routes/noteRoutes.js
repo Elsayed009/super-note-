@@ -5,17 +5,17 @@ const router = express.Router();
 const noteController = require('../controller/noteController')
 const auth = require('../middlewares/auth');
 const { validateNote } = require('../middlewares/validator');
-
+const track = require('../utils/tracker');
 
 // routes
+router.get('/', auth, track(noteController.getActiveNotes)); 
+router.get('/public/:shareId',track(noteController.getPublicNote));
 
-router.get('/public/:shareId',noteController.getPublicNote);
+router.post('/',auth, validateNote, track(noteController.createNote));
 
-router.post('/',auth, validateNote, noteController.createNote);
-
-router.put('/:id',auth,validateNote, noteController.updateNote);
-router.delete('/:id', auth, noteController.deleteNote);
-router.patch('/share:id',auth, noteController.shareNote);
+router.put('/:id',auth,validateNote, track(noteController.updateNote));
+router.delete('/:id', auth, track(noteController.deleteNote));
+router.patch('/share/:id',auth, track(noteController.shareNote));
 module.exports = router;
 
 
