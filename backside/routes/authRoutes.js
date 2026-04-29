@@ -3,7 +3,7 @@ const router = express.Router();
 const authController = require('../controller/authController');
 const { validateRegister } = require('../middlewares/userValidator');
 const auth = require('../middlewares/auth');
-const track = require('../utils/tracker');
+// const track = require('../utils/tracker');
 
 
 // non wraped endpoints cause user is still undefined 
@@ -13,10 +13,24 @@ router.post('/forgot-password', authController.getsecurityQuestion);
 router.post('/reset-password', authController.resetPassword);
 
 // portected endpoints so we can wrapped it
-router.post('/logout', track(authController.logout));
-router.delete('/delete-account', auth, track(authController.deleteAccount));
-router.get('/logs', auth, track(authController.getUserLogs));
+// ضفنا auth للـ logout عشان نقدر نسجل الـ ID بتاع اللي عمل logout
+router.post('/logout', auth, authController.logout); 
+router.delete('/delete-account', auth, authController.deleteAccount);
+router.get('/logs', auth, authController.getUserLogs);
+
 module.exports = router;
+
+// // non wraped endpoints cause user is still undefined 
+// router.post('/register', validateRegister, authController.register);
+// router.post('/login', authController.login);
+// router.post('/forgot-password', authController.getsecurityQuestion);
+// router.post('/reset-password', authController.resetPassword);
+
+// // portected endpoints so we can wrapped it
+// router.post('/logout', track(authController.logout));
+// router.delete('/delete-account', auth, track(authController.deleteAccount));
+// router.get('/logs', auth, track(authController.getUserLogs));
+// module.exports = router;
 
 
 

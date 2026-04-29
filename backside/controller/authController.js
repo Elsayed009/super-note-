@@ -23,10 +23,10 @@ const register = async (req, res)=> {
             securityAnswer: hashedAnswer
         });
         await newUser.save(); // go get it and await it to be geted and save it
-        await logAction(newUser._id, "regisered");
+        await logAction(newUser._id, "Register", "User created a new account");
         res.status(201).json({msg: 'user created successfully', dat: newUser});
     }catch(err){
-        if (newUser && newUser._id) {
+        if (typeof newUser !== 'undefined' && newUser && newUser._id) {
             await User.findByIdAndDelete(newUser._id); // "إنسى إني سجلتك"
             console.log("Rollback: User deleted because tracking failed.");
         }
@@ -47,7 +47,7 @@ const login = async (req, res)=> {
         // logs 
         // user.logs.push({action: "user logged in", date: new Date()});
         // await user.save();
-        await logAction(user._id, "logged in");
+        await logAction(user._id, "Login", "User logged in successfully");
         // creat token 
         const token = jwt.sign(
             {id: user._id},
@@ -64,7 +64,7 @@ const login = async (req, res)=> {
                      email: user.email}});
 
     }catch(err){
-        res.status(500).json({msg: "server dawn", error: err.message});
+        res.status(500).json({msg: "server down", error: err.message});
     }
 };
 
@@ -74,6 +74,10 @@ const login = async (req, res)=> {
 // }
 const logout = async (req, res) => {
     try {
+
+        if(req.user && req.user.id){
+            await logAction(req.user.id, "Logout", "User logged out of the system")
+        }
         res.clearCookie('token');
         res.status(200).json({ msg: "Logged out successfully" });
     } catch (err) {
@@ -102,11 +106,14 @@ const resetPassword = async (req, res, next)=>{
         if(!user) return res.status(404).json({msg: "user not founded"});
 
         const isAnswerCorrect = await bcrypt.compare(securityAnswer.toLowerCase(), user.securityAnswer);
-        if(!isAnswerCorrect) return res.status(400).json({msg: "security answer is not correct"});
+        if(!isAnswerCorrect) {
+            logAction(user._id, "Security Warning", "Failed password reset attempt (Incorrect Security Answer)")
+            return res.status(400).json({msg: "security answer is not correct"});}
 
         user.password = await bcrypt.hash(newPassword, 10);
         await user.save();
-        await logAction(user._id, "resetPassword");
+
+        await logAction(user._id, "Reset Password", "Password has been successfully reset");
         res.status(200).json({msg: "password has been reseted, you can login again now.."});
 
     }catch(err){
@@ -120,6 +127,7 @@ const deleteAccount = async (req, res)=>{
       const userId = req.user.id;
       await Note.deleteMany({user: userId});
       await User.findByIdAndDelete(userId);
+
       res.clearCookie('token');
       res.status(200).json({msg: "account and all its related notes deleted successfully"});
     }catch(err){
@@ -134,7 +142,9 @@ const getUserLogs= async (req, res)=>{
         const user = await User.findById(req.user.id).select('logs');
         if (!user) return res.status(404).json({msg: "user not founded"});
 
-        res.status(200).json({msg: "logs retrieved successfully", logs: user.logs});
+        await logAction(req.user.id, "View Activity", "Viewed account activity logs");
+        const sortedLogs = user.logs.sort((a,b) =>b.at - a.at);
+        res.status(200).json({msg: "logs retrieved successfully", logs: sortedLogs});
 
     }catch(err){
         res.status(500).json({msg: "server error", error: err.message});
@@ -142,4 +152,4 @@ const getUserLogs= async (req, res)=>{
 };
 
 
-module.exports = {register, login, logout, getsecurityQuestion, resetPassword, deleteAccount, getUserLogs };
+module.exports = { register, login, logout, getsecurityQuestion, resetPassword, deleteAccount, getUserLogs };
