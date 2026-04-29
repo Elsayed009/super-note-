@@ -2,6 +2,7 @@
 const Note = require('../models/Note');
 const User = require('../models/User');
 const crypto = require('crypto');
+const logAction = require('../utils/logger');
 
 const extractKeyWords = (content)=>{
   const stopWords = [
@@ -56,14 +57,16 @@ const createNote = async (req, res )=> {
     // const autoTags = extractKeyWords(content);
     await User.findByIdAndUpdate(req.user.id, {
       $push: {
-        interests: {$each: autoTags}, 
-        logs: {
-          action: "created_note",
-          details: `user created a note with tags: ${autoTags.join(', ')}`
-        }
+        interests: {$each: autoTags} 
+        // dispach interests of logs 
+
+        // logs: {
+        //   action: "created_note",
+        //   details: `user created a note with tags: ${autoTags.join(', ')}`
+        // }
       }
     });
-
+    await logAction(req.user.id, "create note", `create note: "${title}" with tags: [${autoTags.join(', ')}]`);
     res.status(201).json({msg: "note created", data: newNote});
   }catch(err){
     res.status(500).json({msg: "server erorr", data: err.message});
@@ -74,13 +77,24 @@ const createNote = async (req, res )=> {
 const updateNote = async (req, res)=> {
   try{
     const {id}= req.params;
+    // const {title, content, tags} = req.body;
     const {title, content} = req.body;
     // const oldNote = await Note.findById(id);
     const oldNote = await Note.findOne({_id: id, user: req.user.id});
     //check
     if(!oldNote) return res.status(404).json({msg: "note is not founded"});
 
+    const isIdentical = (title===undefined || title===oldNote.title)&&
+    (content===undefined || content===oldNote.content);
+
+    if (isIdentical){
+      await logAction(req.user.id, "review note", `reviewed note: "${oldNote.title}" without changes`);
+      return res.status(200).json({msg: "no changes detected, note kept as is.", data: oldNote});
+    }
+
+
     const historyEntry = {
+      title: oldNote.title,
       content: oldNote.content,
       updatedAt: new Date()
     };
@@ -95,13 +109,55 @@ const updateNote = async (req, res)=> {
       },
       {new: true}
     );
-
+    await logAction(req.user.id, "update note", `updated note: from "${oldNote.title}" to "${updatedNote.title}"`);
     res.status(200).json({msg: "note updated and history saved", data: updatedNote});
 
   }catch(err){
     res.status(500).json({msg: "server failed", error: err.message});
   }
 }
+
+// searchNotes endpoint (ميزة جديدة)
+const searchNotes = async (req, res) => {
+    try {
+        const { query } = req.query; // بنجيب الكلمة من /search?query=xxx
+        if (!query) return res.status(400).json({ msg: "Search query is required" });
+
+        const searchRegex = new RegExp(query, 'i'); // Ignore case
+
+        const notes = await Note.find({
+            user: req.user.id,
+            isDeleted: false,
+            $or: [
+                { title: searchRegex },
+                { content: searchRegex },
+                { tags: { $in: [searchRegex] } }
+            ]
+        });
+
+        await logAction(req.user.id, "Search", `Searched for: "${query}" (Found ${notes.length} results)`);
+        res.status(200).json({ count: notes.length, data: notes });
+    } catch (err) {
+        res.status(500).json({ msg: "server error", error: err.message });
+    }
+};
+
+
+// getNoteById endpoint (أكشن المشاهدة الفردية)
+const getNoteById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const note = await Note.findOne({ _id: id, user: req.user.id, isDeleted: false });
+        
+        if (!note) return res.status(404).json({ msg: "note is not founded" });
+
+        await logAction(req.user.id, "View Note", `Opened note: "${note.title}"`);
+        res.status(200).json(note);
+    } catch (err) {
+        res.status(500).json({ msg: "server error", error: err.message });
+    }
+};
+
 
 // deletenote endpoint
 const deleteNote = async (req, res)=> {
@@ -177,7 +233,9 @@ const getPublicNote = async (req, res)=>{
 
 
 
-module.exports = {createNote, deleteNote, getActiveNotes, updateNote, shareNote, getPublicNote};
+module.exports = {createNote, deleteNote,
+   getActiveNotes, updateNote, shareNote,
+    getPublicNote, searchNotes, getNoteById};
 
 
 

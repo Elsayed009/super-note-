@@ -23,9 +23,13 @@ const register = async (req, res)=> {
             securityAnswer: hashedAnswer
         });
         await newUser.save(); // go get it and await it to be geted and save it
-        await logAction(req.user.id, "regisered");
+        await logAction(newUser._id, "regisered");
         res.status(201).json({msg: 'user created successfully', dat: newUser});
     }catch(err){
+        if (newUser && newUser._id) {
+            await User.findByIdAndDelete(newUser._id); // "إنسى إني سجلتك"
+            console.log("Rollback: User deleted because tracking failed.");
+        }
         res.status(500).json({msg: "server dawn", error: err.message});
     }
 };
@@ -43,7 +47,7 @@ const login = async (req, res)=> {
         // logs 
         // user.logs.push({action: "user logged in", date: new Date()});
         // await user.save();
-        await logAction(req.user.id, "logged in");
+        await logAction(user._id, "logged in");
         // creat token 
         const token = jwt.sign(
             {id: user._id},
@@ -65,9 +69,17 @@ const login = async (req, res)=> {
 };
 
 // log out endpoint
-const logout = (req, res)=>{
-    res.clearCookie('token').json({msg: "loged out successfully"});
-}
+// const logout = (req, res)=>{
+//     res.clearCookie('token').json({msg: "loged out successfully"});
+// }
+const logout = async (req, res) => {
+    try {
+        res.clearCookie('token');
+        res.status(200).json({ msg: "Logged out successfully" });
+    } catch (err) {
+        res.status(500).json({ msg: "Server Error", error: err.message });
+    }
+};
 
 // securityQuestion
 const getsecurityQuestion = async (req, res, next)=>{

@@ -24,6 +24,7 @@ expiresAt: {
     default: null
 },
 history: [{
+    titel: String,
     content: String,
     modifiedAt: {type: Date, default: Date.now}
 }], 

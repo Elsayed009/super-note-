@@ -3,13 +3,13 @@
 const { date } = require('joi');
 const User = require('../models/User');
 
-const logAction = async (userId, actionName)=>{
+const logAction = async (userId, actionName, details= "")=>{
     try{
         await User.findByIdAndUpdate(userId, {
-            $push: {logs: {action: actionName, date: new Date()}}
+            $push: {logs: {action: actionName, details: details, at: new Date()}}
         });
     }catch(err){
-        console.log("errorr saving lgo: ", err.message);
+        console.log("error saving lgo: ", err.message);
     }
 };
 
